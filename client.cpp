@@ -7,19 +7,39 @@
 using namespace std;
 
 
-void * patient_function(void *arg)
+void *patient_function(void *arg) // why this arg?
 {
-    /* What will the patient threads do? */
+    // if datapoint transfer, n. n=100 example:
+    for(int i = 0; i < 100; i++) {
+        // push to bdd buf
+        continue;
+    }
     
+    // if file, sz/MAX_MESSAGE? - depends how worker deals with a chunk of a file req
+    for(int i = 0; i < 200; i++) {
+        // push to bdd buf
+        continue;
+    }
 }
 
-void *worker_function(void *arg)
+void *worker_function(void *arg) // why this arg?
 {
-    /*
-		Functionality of the worker threads	
-    */
+    // create a channel
+    string s = string(1); // some unique string based on which patient in [1, 15]
+    FIFORequestChannel* chan = new FIFORequestChannel(s.c_str(), FIFORequestChannel::CLIENT_SIDE);
 
+    // work on the input datamsg or (part of a?) filemsg
+    while(true) {
+        // pop from bdd buf and do the work through chan
+        
+        // terminate when bdd buf size is 0? or is this not for sure when?
+        // maybe need to get notified by a conditional variable?
+        // or does join take care of the waiting part we're talking about
+    }
     
+    // quit the channel
+    MESSAGE_TYPE q = QUIT_MSG;
+    chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
 }
 int main(int argc, char *argv[])
 {
@@ -51,6 +71,7 @@ int main(int argc, char *argv[])
 	
 
 	/* Join all threads here */
+    
     gettimeofday (&end, 0);
 	hc.print ();
     int secs = (end.tv_sec * 1e6 + end.tv_usec - start.tv_sec * 1e6 - start.tv_usec)/(int) 1e6;
