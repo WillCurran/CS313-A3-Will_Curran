@@ -39,12 +39,12 @@ public:
 
 	void push(vector<char> data){
         unique_lock<mutex> l1(m_sa);
-        slot_available.wait(l1, []{return cap > 0;}); // wait until space to push
+        slot_available.wait(l1, [this]{return cap > 0;}); // wait until space to push
         cap--;
         full++;
         l1.unlock();
         
-        unique_lock<mtx> l2(mtx);
+        unique_lock<mutex> l2(mtx);
         l2.lock();
         q.push(data);
         l2.unlock();
@@ -54,12 +54,12 @@ public:
 	vector<char> pop(){
 		vector<char> temp;
         unique_lock<mutex> l1(m_da);
-        data_available.wait(l1, []{return full > 0}); // wait until we can pop (full = q.size()
+        data_available.wait(l1, [this]{return full > 0;}); // wait until we can pop (full = q.size()
         cap++;
         full--;
         l1.unlock();
         
-        unique_lock<mtx> l2(mtx);
+        unique_lock<mutex> l2(mtx);
         l2.lock();
         temp = q.front();
         q.pop();
