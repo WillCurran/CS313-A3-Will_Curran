@@ -13,7 +13,7 @@ class BoundedBuffer
 {
 private:
   	int cap; // capacity remaining
-    int full; // size of q. do we need this?
+    int full; // size of q, we can't check q.size() or it would be a race condition
   	queue<vector<char>> q;
 
 	/* mutex to protect the queue from simultaneous producer accesses
@@ -39,15 +39,18 @@ public:
 
 	void push(vector<char> data){
         unique_lock<mutex> l1(m_sa);
+//        cout << "wait for slot to be open." << endl;
         slot_available.wait(l1, [this]{return cap > 0;}); // wait until space to push
+//        cout << "slot is open." << endl;
         cap--;
         full++;
         l1.unlock();
-        
-        unique_lock<mutex> l2(mtx);
-        l2.lock();
+//        cout << "authorized push waiting for q access..." << endl;
+        mtx.lock();
+//        cout << "q lock acquired." << endl;
         q.push(data);
-        l2.unlock();
+        mtx.unlock();
+//        cout << "q lock released." << endl;
         data_available.notify_one(); // wake up one thread to pop
 	}
 
@@ -59,11 +62,10 @@ public:
         full--;
         l1.unlock();
         
-        unique_lock<mutex> l2(mtx);
-        l2.lock();
+        mtx.lock();
         temp = q.front();
         q.pop();
-        l2.unlock();
+        mtx.unlock();
         slot_available.notify_one(); // wake up one thread to push
 		return temp;  
 	}
