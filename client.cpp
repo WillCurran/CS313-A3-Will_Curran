@@ -74,12 +74,14 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
     // work on the input datamsg or (part of a?) filemsg
     while(true) {
         // pop from bdd buf and do the work through chan
-        cout << "waiting to pop." << endl;
+//        cout << "waiting to pop." << endl;
         vector<char> popped = b->pop();
-        cout << "popped" << endl;
+//        cout << "popped" << endl;
+        cout << "about to cast datamsg" << endl;
         datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
+        cout << "casted datamsg" << endl;
         if(d->mtype == QUIT_MSG) {
-            cout << "worker quitting." << endl;
+//            cout << "worker quitting." << endl;
             b->push(popped); // for other workers to use
             break;
         } else if (d->mtype == DATA_MSG) {
@@ -88,6 +90,7 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
             cout << "secs = " << d->seconds << endl;
             cout << "ecgno = " << d->ecgno << endl;
             cout << "writing data to server." << endl;
+            
             w_chan->cwrite((char *)d, sizeof (d));
             char* buf =  w_chan->cread();
             double* reply = (double*) buf;
@@ -107,7 +110,7 @@ int main(int argc, char *argv[])
     int n = 10;    //default number of requests per "patient"
     int p = 1;     // number of patients [1,15] 10
     int w = 1;    //default number of worker threads 100
-    int b = 20; 	// default capacity of the request buffer, you should change this default
+    int b = 1; 	// default capacity of the request buffer, you should change this default
 	int m = MAX_MESSAGE; 	// default capacity of the file buffer
     MESSAGE_TYPE ncm = NEWCHANNEL_MSG;
     MESSAGE_TYPE q = QUIT_MSG;

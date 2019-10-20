@@ -39,9 +39,9 @@ public:
 
 	void push(vector<char> data){
         unique_lock<mutex> l1(m_sa);
-//        cout << "wait for slot to be open." << endl;
+        cout << "wait for slot to be open." << endl;
         slot_available.wait(l1, [this]{return cap > 0;}); // wait until space to push
-//        cout << "slot is open." << endl;
+        cout << "slot is open." << endl;
         cap--;
         full++;
         l1.unlock();
@@ -49,6 +49,7 @@ public:
         mtx.lock();
 //        cout << "q lock acquired." << endl;
         q.push(data);
+        cout << "q size after pushed = " << q.size() << endl;
         mtx.unlock();
 //        cout << "q lock released." << endl;
         data_available.notify_one(); // wake up one thread to pop
@@ -65,6 +66,7 @@ public:
         mtx.lock();
         temp = q.front();
         q.pop();
+        cout << "popped." << endl;
         mtx.unlock();
         slot_available.notify_one(); // wake up one thread to push
 		return temp;  
