@@ -49,9 +49,8 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests)
 //    } else {
         double time = 0.000;
         for(int i = 0; i < num_requests; i++) {
-            datamsg d = datamsg(patient, time, 1); // default ecg data 1 for now
+            datamsg d = datamsg(1, 0.000, 1); // same message every time
             vector<char> buf((char*)&d, (char*)&d + sizeof(d));
-            cout << "requesting patient " << patient << ", time " << time << endl;
             b->push(buf);
             time += 0.004;
         }
@@ -72,33 +71,40 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 //    assert(*reply == -0.19);
 
     // work on the input datamsg or (part of a?) filemsg
+    int count = 1;
     while(true) {
         // pop from bdd buf and do the work through chan
 //        cout << "waiting to pop." << endl;
         vector<char> popped = b->pop();
+//        char* mydata = popped.data();
 //        cout << "popped" << endl;
 //        cout << "about to cast datamsg" << endl;
-//        datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
-//        cout << "casted datamsg" << endl;
-//        if(d->mtype == QUIT_MSG) {
-////            cout << "worker quitting." << endl;
-//            b->push(popped); // for other workers to use
-//            break;
-//        } else if (d->mtype == DATA_MSG) {
+//        cout << popped.size() << endl;
+//        fwrite(mydata, 1, 1, stdout);
+        datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
+        datamsg q = *d;
+//        cout << "datamsg of type: " << q.mtype << endl;
+        
+        if(d->mtype == QUIT_MSG) {
+//            cout << "worker quitting." << endl;
+            b->push(popped); // for other workers to use
+            break;
+        } else if (d->mtype == DATA_MSG) {
 //            cout << "Got data message: " << endl;
 //            cout << "person = " << d->person << endl;
 //            cout << "secs = " << d->seconds << endl;
 //            cout << "ecgno = " << d->ecgno << endl;
+            cout << "count is " << count << " out of 2000" << endl << endl;
 //            cout << "writing data to server." << endl;
-//
 //            w_chan->cwrite((char *)d, sizeof (d));
 //            char* buf =  w_chan->cread();
 //            double* reply = (double*) buf;
 //            cout << *reply << endl; // why is this same every time??
-//        } else { // file msg
-//
-//        }
+        } else { // file msg
+
+        }
         // add to histogram or to file depending on request
+        count++;
     }
     
     MESSAGE_TYPE q = QUIT_MSG;
@@ -107,10 +113,10 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 }
 int main(int argc, char *argv[])
 {
-    int n = 100;    //default number of requests per "patient"
+    int n = 1000;    //default number of requests per "patient"
     int p = 2;     // number of patients [1,15] 10
-    int w = 2;    //default number of worker threads 100
-    int b = 1; 	// default capacity of the request buffer, you should change this default
+    int w = 1;    //default number of worker threads 100
+    int b = 100000; 	// default capacity of the request buffer, you should change this default
 	int m = MAX_MESSAGE; 	// default capacity of the file buffer
     MESSAGE_TYPE ncm = NEWCHANNEL_MSG;
     MESSAGE_TYPE q = QUIT_MSG;
@@ -143,7 +149,7 @@ int main(int argc, char *argv[])
         chan->cwrite((char *)&ncm, sizeof (ncm));
         char* buf = chan->cread();
         string name = buf;
-//        cout << "channel " << name << " created." << endl;
+        cout << "channel " << name << " created for w" << i << endl;
         FIFORequestChannel* w_chan = new FIFORequestChannel(name, FIFORequestChannel::CLIENT_SIDE);
         workers[i] = thread(worker_function, &request_buffer, w_chan);
     }
@@ -151,8 +157,9 @@ int main(int argc, char *argv[])
 	/* Join all threads here */
     for(int i = 0; i < p; i++)
         patients[i].join();
-    vector<char> quit_data((char*)&q, (char*)&q + sizeof(&q));
+    vector<char> quit_data((char*)&q, (char*)&q + sizeof(q));
     request_buffer.push(quit_data); // patients are done, signal for workers to finish
+//    request_buffer.print();
     for(int i = 0; i < w; i++)
         workers[i].join();
     
