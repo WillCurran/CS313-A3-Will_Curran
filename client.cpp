@@ -119,12 +119,55 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
 int main(int argc, char *argv[])
 {
     int n = 15000;    //default number of requests per "patient"
-    int p = 15;     // number of patients [1,15] 10
-    int w = 1000;    //default number of worker threads 100
+    int p = 2;     // number of patients [1,15] 10
+    int w = 500;    //default number of worker threads 100
     int b = 50; 	// default capacity of the request buffer, you should change this default
 	int m = MAX_MESSAGE; 	// default capacity of the file buffer
     MESSAGE_TYPE ncm = NEWCHANNEL_MSG;
     MESSAGE_TYPE q = QUIT_MSG;
+    
+    int option;
+    int errflag = 0;
+    extern char *optarg;
+    extern int optind, optopt;
+
+    while ((option = getopt(argc, argv, "n:p:w:b:")) != -1) {
+        switch(option) {
+            case 'n':
+                if(isdigit(optarg[0])) {
+                    n = atoi(optarg);
+                }
+                else
+                    errflag++;
+                break;
+            case 'p':
+                if(isdigit(optarg[0])) {
+                    p = atoi(optarg);
+                }
+                else
+                    errflag++;
+                break;
+            case 'w':
+                if(isdigit(optarg[0]))
+                    w = atoi(optarg);
+                else
+                    errflag++;
+                break;
+            case 'b':
+                if(isdigit(optarg[0]))
+                    b = atoi(optarg);
+                else
+                    errflag++;
+                break;
+            case '?':
+                errflag++;
+        }
+    }
+    if (errflag) {
+        fprintf(stderr, "usage: client [-n <datapoints>] [-p <people>] [-w <worker threads>] OR ...\n");
+        return 1;
+    }
+    
     srand(time_t(NULL));
     
     int pid = fork();
