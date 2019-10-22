@@ -22,17 +22,30 @@ struct PatientData {
         b(bb), file_transfer(ft), patient(p), filename(fn), num_requests(nr), master(m) {}
 };
 
-void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isFT, int file_size_bytes)
+void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isFT, int file_size_bytes, string filename)
 {
     if(isFT) {
-        int buf_size = MAX_MESSAGE;
-        char* block = new char[MAX_MESSAGE];
+        int buf_size = MAX_MESSAGE; // buf size which will be received
+        int block_size = sizeof(filemsg) + sizeof(filename); // block size sent
+        char* block = new char[block_size];
         filemsg* msg = (filemsg*) block;
+        char* filename_to_server = block + sizeof(filemsg);
+        strcpy(filename_to_server, filename.c_str());
+        
+//        string filename = block + sizeof (filemsg);
+//        filename = "BIMDC/" + filename; // adding the path prefix to the requested file name
+//        cout << "Server received request for file " << filename << endl;
+        
         int len_remaining = file_size_bytes;
         while(len_remaining > 0) { // keep writing until nothing left
             if(len_remaining < MAX_MESSAGE) // last portion
                 buf_size = (int) len_remaining;
             *msg = filemsg(file_size_bytes - len_remaining, buf_size);
+            
+//            string filename = block + sizeof (filemsg);
+//            filename = "BIMDC/" + filename; // adding the path prefix to the requested file name
+//            cout << "Server received request for file " << filename << endl;
+            
             vector<char> buf((char*)msg, (char*)msg + sizeof(filemsg)); // copy message to vector<char> format
             b->push(buf);
             len_remaining -= MAX_MESSAGE;
@@ -51,6 +64,15 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isF
 
 void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCollection* hc, mutex hc_mtx[], string filename)
 {
+    int fd;
+    string new_file = "./received/" + filename;
+    if(filename != "") {
+        if((fd = open(new_file.c_str(), O_RDWR|O_CREAT)) < 0) {
+            perror("open");
+            _exit(1);
+        }
+    }
+    
     while(true) {
         vector<char> popped = b->pop();
         datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
@@ -71,14 +93,9 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
             hc_mtx[d->person - 1].lock();
             hc->getHist(d->person)->update(*reply);
             hc_mtx[d->person - 1].unlock();
+            delete[] buf;
         } else { // file msg
             // open file
-            int fd;
-            string new_file = "./received/" + filename;
-            if((fd = open(new_file.c_str(), O_RDWR|O_CREAT)) < 0) {
-                perror("open");
-                _exit(1);
-            }
             filemsg* f = (filemsg *)reinterpret_cast<char*>(popped.data());
             int block_size = sizeof(filemsg) + sizeof(filename.c_str());
             w_chan->cwrite((char *)f, block_size);
@@ -89,13 +106,13 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
                 _exit(1);
             }
             // close file
-            if(close(fd) < 0) {
-                perror("close");
-                exit(1);
-            }
+            delete[] buf;
         }
     }
-    
+    if(close(fd) < 0) {
+        perror("close");
+        exit(1);
+    }
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
 //    cout << "Worker killed." << endl;
@@ -203,7 +220,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
         // create patient thread
-        thread pt(patient_function, &request_buffer, 0, 0, true, *len);
+        thread pt(patient_function, &request_buffer, 0, 0, true, *len, file_str);
         // create channels, create worker threads
         for(int i = 0; i < w; i++) {
                 chan->cwrite((char *)&ncm, sizeof (ncm));
@@ -226,7 +243,7 @@ int main(int argc, char *argv[])
         
         /* Start all threads here */
         for(int i = 1; i <= p; i++) {
-            patients[i-1] = thread(patient_function, &request_buffer, i, n, false, 0);
+            patients[i-1] = thread(patient_function, &request_buffer, i, n, false, 0, "");
             Histogram* h = new Histogram(NUM_BUCKETS, MIN_HIST, MAX_HIST); // one for each person
             hc.add(h);
     //        hc_mtx[i-1] = mutex();
