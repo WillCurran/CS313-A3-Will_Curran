@@ -25,28 +25,21 @@ struct PatientData {
 void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isFT, int file_size_bytes, string filename)
 {
     if(isFT) {
-        int buf_size = MAX_MESSAGE; // buf size which will be received
-        int block_size = sizeof(filemsg) + sizeof(filename); // block size sent
+        const char* filename_cstr = filename.c_str();
+        
+        int block_size = sizeof(filemsg) + sizeof(filename_cstr); // block size sent
         char* block = new char[block_size];
         filemsg* msg = (filemsg*) block;
         char* filename_to_server = block + sizeof(filemsg);
         strcpy(filename_to_server, filename.c_str());
         
-//        string filename = block + sizeof (filemsg);
-//        filename = "BIMDC/" + filename; // adding the path prefix to the requested file name
-//        cout << "Server received request for file " << filename << endl;
-        
         int len_remaining = file_size_bytes;
+        int buf_size = MAX_MESSAGE; // buf size which will be received
         while(len_remaining > 0) { // keep writing until nothing left
             if(len_remaining < MAX_MESSAGE) // last portion
                 buf_size = (int) len_remaining;
             *msg = filemsg(file_size_bytes - len_remaining, buf_size);
-            
-//            string filename = block + sizeof (filemsg);
-//            filename = "BIMDC/" + filename; // adding the path prefix to the requested file name
-//            cout << "Server received request for file " << filename << endl;
-            
-            vector<char> buf((char*)msg, (char*)msg + sizeof(filemsg)); // copy message to vector<char> format
+            vector<char> buf((char*)msg, (char*)msg + block_size); // copy message to vector<char> format
             b->push(buf);
             len_remaining -= MAX_MESSAGE;
         }
@@ -65,7 +58,7 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isF
 void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCollection* hc, mutex hc_mtx[], string filename)
 {
     int fd;
-    string new_file = "./received/" + filename;
+    string new_file = filename; // NOT IN SUDIRECTORY
     if(filename != "") {
         if((fd = open(new_file.c_str(), O_RDWR|O_CREAT)) < 0) {
             perror("open");
@@ -95,17 +88,16 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
             hc_mtx[d->person - 1].unlock();
             delete[] buf;
         } else { // file msg
-            // open file
             filemsg* f = (filemsg *)reinterpret_cast<char*>(popped.data());
             int block_size = sizeof(filemsg) + sizeof(filename.c_str());
             w_chan->cwrite((char *)f, block_size);
             char* buf = w_chan->cread();
             lseek(fd, f->offset, SEEK_SET); // advance to where we want to write
+//            cout << "writing..." << endl;
             if(write(fd, buf, f->length) < 0) {
                 perror("write");
                 _exit(1);
             }
-            // close file
             delete[] buf;
         }
     }
@@ -115,6 +107,7 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
     }
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
+    delete w_chan;
 //    cout << "Worker killed." << endl;
 }
 
