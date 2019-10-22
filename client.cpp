@@ -4,6 +4,10 @@
 #include "common.h"
 #include "HistogramCollection.h"
 #include "FIFOreqchannel.h"
+#include <mutex>
+#define MIN_HIST -8.5
+#define MAX_HIST 8.5
+#define NUM_BUCKETS 25
 using namespace std;
 
 
@@ -49,7 +53,7 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests)
 //    } else {
         double time = 0.000;
         for(int i = 0; i < num_requests; i++) {
-            datamsg d = datamsg(1, 0.000, 1); // same message every time
+            datamsg d = datamsg(patient, time, 1); // same message every time
             vector<char> buf((char*)&d, (char*)&d + sizeof(d));
             b->push(buf);
             time += 0.004;
@@ -59,7 +63,7 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests)
 //    delete[] block;
 }
 
-void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
+void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCollection* hc, mutex hc_mtx[])
 {
     
     // check to see if this channel works. it does.
@@ -82,22 +86,25 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 //        fwrite(mydata, 1, 1, stdout);
         datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
         datamsg q = *d;
-        cout << "datamsg of type: " << q.mtype << endl;
+//        cout << "datamsg of type: " << q.mtype << endl;
         
         if(d->mtype == QUIT_MSG) {
-            cout << "push back quit msg" << endl;
+//            cout << "push back quit msg" << endl;
             b->push(popped); // for other workers to use
             break;
         } else if (d->mtype == DATA_MSG) {
-            cout << "Got data message: " << endl;
-            cout << "person = " << d->person << endl;
-            cout << "secs = " << d->seconds << endl;
-            cout << "ecgno = " << d->ecgno << endl;
+//            cout << "Got data message: " << endl;
+//            cout << "person = " << d->person << endl;
+//            cout << "secs = " << d->seconds << endl;
+//            cout << "ecgno = " << d->ecgno << endl;
 //            cout << "writing data to server." << endl;
-//            w_chan->cwrite((char *)d, sizeof (d));
-//            char* buf =  w_chan->cread();
-//            double* reply = (double*) buf;
+            w_chan->cwrite((char *)d, sizeof (q));
+            char* buf =  w_chan->cread();
+            double* reply = (double*) buf;
 //            cout << *reply << endl; // why is this same every time??
+            hc_mtx[d->person - 1].lock();
+            hc->getHist(d->person)->update(*reply);
+            hc_mtx[d->person - 1].unlock();
         } else { // file msg
 
         }
@@ -106,15 +113,15 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
     
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
-    cout << "Worker killed." << endl;
+//    cout << "Worker killed." << endl;
 }
 
 int main(int argc, char *argv[])
 {
-    int n = 1000;    //default number of requests per "patient"
-    int p = 1;     // number of patients [1,15] 10
-    int w = 2;    //default number of worker threads 100
-    int b = 100000; 	// default capacity of the request buffer, you should change this default
+    int n = 15000;    //default number of requests per "patient"
+    int p = 15;     // number of patients [1,15] 10
+    int w = 1000;    //default number of worker threads 100
+    int b = 50; 	// default capacity of the request buffer, you should change this default
 	int m = MAX_MESSAGE; 	// default capacity of the file buffer
     MESSAGE_TYPE ncm = NEWCHANNEL_MSG;
     MESSAGE_TYPE q = QUIT_MSG;
@@ -129,7 +136,9 @@ int main(int argc, char *argv[])
     
 	FIFORequestChannel* chan = new FIFORequestChannel("control", FIFORequestChannel::CLIENT_SIDE);
     BoundedBuffer request_buffer(b);
+    
 	HistogramCollection hc;
+    mutex* hc_mtx = new mutex[p];
     
     thread* patients = new thread[p];
     thread* workers = new thread[w];
@@ -139,17 +148,19 @@ int main(int argc, char *argv[])
 
     /* Start all threads here */
     for(int i = 1; i <= p; i++) {
-//        PatientData pd (request_buffer, false, i, "", 10, chan);
         patients[i-1] = thread(patient_function, &request_buffer, i, n);
+        Histogram* h = new Histogram(NUM_BUCKETS, MIN_HIST, MAX_HIST); // one for each person
+        hc.add(h);
+//        hc_mtx[i-1] = mutex();
     }
     
     for(int i = 0; i < w; i++) { // create channels, create worker threads
         chan->cwrite((char *)&ncm, sizeof (ncm));
         char* buf = chan->cread();
         string name = buf;
-        cout << "channel " << name << " created for w" << i << endl;
+//        cout << "channel " << name << " created for w" << i << endl;
         FIFORequestChannel* w_chan = new FIFORequestChannel(name, FIFORequestChannel::CLIENT_SIDE);
-        workers[i] = thread(worker_function, &request_buffer, w_chan);
+        workers[i] = thread(worker_function, &request_buffer, w_chan, &hc, hc_mtx);
     }
 
 	/* Join all threads here */
@@ -162,6 +173,7 @@ int main(int argc, char *argv[])
         workers[i].join();
     delete[] patients;
     delete[] workers;
+    delete[] hc_mtx;
     
     gettimeofday (&end, 0);
 	hc.print ();

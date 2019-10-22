@@ -12,8 +12,18 @@ public:
         hists.clear();
     }
     
+    ~HistogramCollection (){
+        hists.clear();
+    }
+    
     void add (Histogram* h){
         hists.push_back (h);
+    }
+    
+    Histogram* getHist(int patient) {
+//        assert(patient >= 1);
+//        assert(patient <= (int)hists.size());
+        return hists[patient-1];
     }
     
     void print (){
