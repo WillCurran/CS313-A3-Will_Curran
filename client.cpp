@@ -71,7 +71,6 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 //    assert(*reply == -0.19);
 
     // work on the input datamsg or (part of a?) filemsg
-    int count = 1;
     while(true) {
         // pop from bdd buf and do the work through chan
 //        cout << "waiting to pop." << endl;
@@ -83,18 +82,17 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 //        fwrite(mydata, 1, 1, stdout);
         datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
         datamsg q = *d;
-//        cout << "datamsg of type: " << q.mtype << endl;
+        cout << "datamsg of type: " << q.mtype << endl;
         
         if(d->mtype == QUIT_MSG) {
-//            cout << "worker quitting." << endl;
+            cout << "push back quit msg" << endl;
             b->push(popped); // for other workers to use
             break;
         } else if (d->mtype == DATA_MSG) {
-//            cout << "Got data message: " << endl;
-//            cout << "person = " << d->person << endl;
-//            cout << "secs = " << d->seconds << endl;
-//            cout << "ecgno = " << d->ecgno << endl;
-            cout << "count is " << count << " out of 2000" << endl << endl;
+            cout << "Got data message: " << endl;
+            cout << "person = " << d->person << endl;
+            cout << "secs = " << d->seconds << endl;
+            cout << "ecgno = " << d->ecgno << endl;
 //            cout << "writing data to server." << endl;
 //            w_chan->cwrite((char *)d, sizeof (d));
 //            char* buf =  w_chan->cread();
@@ -104,18 +102,18 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan)
 
         }
         // add to histogram or to file depending on request
-        count++;
     }
     
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
     cout << "Worker killed." << endl;
 }
+
 int main(int argc, char *argv[])
 {
     int n = 1000;    //default number of requests per "patient"
-    int p = 2;     // number of patients [1,15] 10
-    int w = 1;    //default number of worker threads 100
+    int p = 1;     // number of patients [1,15] 10
+    int w = 2;    //default number of worker threads 100
     int b = 100000; 	// default capacity of the request buffer, you should change this default
 	int m = MAX_MESSAGE; 	// default capacity of the file buffer
     MESSAGE_TYPE ncm = NEWCHANNEL_MSG;
@@ -162,7 +160,6 @@ int main(int argc, char *argv[])
 //    request_buffer.print();
     for(int i = 0; i < w; i++)
         workers[i].join();
-    
     delete[] patients;
     delete[] workers;
     

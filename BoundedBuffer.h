@@ -39,21 +39,18 @@ public:
 
 	void push(vector<char> data){
         unique_lock<mutex> l1(m_sa);
-//        cout << "wait for slot to be open." << endl;
+        cout << "wait until pushable..." << endl;
         slot_available.wait(l1, [this]{return cap > 0;}); // wait until space to push
-//        cout << "slot is open." << endl;
+        mtx.lock();
         cap--;
         full++;
-//        cout << "full == " << full << endl;
+        cout << "full = " << full << endl;
         l1.unlock();
-//        cout << "authorized push waiting for q access..." << endl;
-        mtx.lock();
-//        cout << "q lock acquired." << endl;
+        
         q.push(data);
-//        cout << "q size after pushed = " << q.size() << endl;
         mtx.unlock();
-//        cout << "q lock released." << endl;
         data_available.notify_one(); // wake up one thread to pop
+        cout << "pushed" << endl;
 	}
 
 	vector<char> pop(){
@@ -62,11 +59,11 @@ public:
         cout << "wait until poppable..." << endl;
         data_available.wait(l1, [this]{return full > 0;}); // wait until we can pop (full = q.size()
         cout << "popping" << endl;
+        mtx.lock();
         cap++;
         full--;
         l1.unlock();
         
-        mtx.lock();
         temp = q.front();
         q.pop();
 //        cout << "popped." << endl;
@@ -76,6 +73,7 @@ public:
 	}
     
     void print() {
+        int count = 0;
         while(!q.empty()) {
             vector<char> popped = pop();
             cout << "popped" << endl;
@@ -91,7 +89,9 @@ public:
                 cout << "ecgno = " << d->ecgno << endl;
                 cout << "writing data to server." << endl;
             }
+            count++;
         }
+        cout << count << " total items in the queue" << endl;
     }
 };
 
