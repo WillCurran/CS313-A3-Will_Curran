@@ -101,10 +101,13 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
             delete[] buf;
         }
     }
-    if(close(fd) < 0) {
-        perror("close");
-        exit(1);
+    if(filename != "") {
+        if(close(fd) < 0) {
+            perror("close");
+            exit(1);
+        }
     }
+    
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
     delete w_chan;
