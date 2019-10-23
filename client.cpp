@@ -5,9 +5,9 @@
 #include "HistogramCollection.h"
 #include "FIFOreqchannel.h"
 #include <mutex>
-#define MIN_HIST -8.5
-#define MAX_HIST 8.5
-#define NUM_BUCKETS 25
+#define MIN_HIST -2.0
+#define MAX_HIST 2.0
+#define NUM_BUCKETS 10
 using namespace std;
 
 
@@ -60,7 +60,7 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
     int fd;
     string new_file = filename; // NOT IN SUDIRECTORY
     if(filename != "") {
-        if((fd = open(new_file.c_str(), O_RDWR|O_CREAT)) < 0) {
+        if((fd = open(new_file.c_str(), O_RDWR|O_CREAT, 0777)) < 0) {
             perror("open");
             _exit(1);
         }
@@ -206,7 +206,7 @@ int main(int argc, char *argv[])
         // pre-allocate our file to the designated length
         int fd;
         string new_file = "./received/" + file_str;
-        if((fd = open(new_file.c_str(), O_RDWR|O_CREAT)) < 0) {
+        if((fd = open(new_file.c_str(), O_RDWR|O_CREAT, 0777)) < 0) {
             perror("open");
             _exit(1);
         }
@@ -270,7 +270,7 @@ int main(int argc, char *argv[])
     
     int secs = (end.tv_sec * 1e6 + end.tv_usec - start.tv_sec * 1e6 - start.tv_usec)/(int) 1e6;
     int usecs = (int)(end.tv_sec * 1e6 + end.tv_usec - start.tv_sec * 1e6 - start.tv_usec)%((int) 1e6);
-    cout << "Took " << secs << " seconds and " << usecs << " micro seconds" << endl;
+    cout << secs + usecs/((double)(10*10*10*10*10*10)) << endl;
 
     
     chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
