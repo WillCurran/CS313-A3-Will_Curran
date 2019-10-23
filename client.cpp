@@ -11,17 +11,6 @@
 using namespace std;
 
 
-struct PatientData {
-    BoundedBuffer &b;
-    bool file_transfer;
-    int patient;
-    const char* filename;
-    int num_requests;
-    FIFORequestChannel* master;
-    PatientData(BoundedBuffer &bb, bool ft, int p, const char* fn, int nr, FIFORequestChannel* m) :
-        b(bb), file_transfer(ft), patient(p), filename(fn), num_requests(nr), master(m) {}
-};
-
 void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isFT, int file_size_bytes, string filename)
 {
     if(isFT) {
@@ -69,20 +58,13 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
     while(true) {
         vector<char> popped = b->pop();
         datamsg* d = (datamsg *)reinterpret_cast<char*>(popped.data());
-//        datamsg q = *d;
         if(d->mtype == QUIT_MSG) {
             b->push(popped); // for other workers to use
             break;
         } else if (d->mtype == DATA_MSG) {
-//            cout << "Got data message: " << endl;
-//            cout << "person = " << d->person << endl;
-//            cout << "secs = " << d->seconds << endl;
-//            cout << "ecgno = " << d->ecgno << endl;
-//            cout << "writing data to server." << endl;
             w_chan->cwrite((char *)d, sizeof (*d));
             char* buf =  w_chan->cread();
             double* reply = (double*) buf;
-//            cout << *reply << endl; // why is this same every time??
             hc_mtx[d->person - 1].lock();
             hc->getHist(d->person)->update(*reply);
             hc_mtx[d->person - 1].unlock();
@@ -93,7 +75,6 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
             w_chan->cwrite((char *)f, block_size);
             char* buf = w_chan->cread();
             lseek(fd, f->offset, SEEK_SET); // advance to where we want to write
-//            cout << "writing..." << endl;
             if(write(fd, buf, f->length) < 0) {
                 perror("write");
                 _exit(1);
@@ -111,7 +92,6 @@ void *worker_function(BoundedBuffer* b, FIFORequestChannel* w_chan, HistogramCol
     MESSAGE_TYPE q = QUIT_MSG;
     w_chan->cwrite ((char *) &q, sizeof (MESSAGE_TYPE));
     delete w_chan;
-//    cout << "Worker killed." << endl;
 }
 
 int main(int argc, char *argv[])
@@ -203,6 +183,7 @@ int main(int argc, char *argv[])
         chan->cwrite((char *)getFileLength, block_size);
         char* buf = chan->cread();
         __int64_t* len = (__int64_t*) buf;
+        delete[] buf;
         // pre-allocate our file to the designated length
         int fd;
         string new_file = "./received/" + file_str;
@@ -219,11 +200,12 @@ int main(int argc, char *argv[])
         thread pt(patient_function, &request_buffer, 0, 0, true, *len, file_str);
         // create channels, create worker threads
         for(int i = 0; i < w; i++) {
-                chan->cwrite((char *)&ncm, sizeof (ncm));
-                char* buf = chan->cread();
-                string name = buf;
-                FIFORequestChannel* w_chan = new FIFORequestChannel(name, FIFORequestChannel::CLIENT_SIDE);
-                workers[i] = thread(worker_function, &request_buffer, w_chan, &hc, hc_mtx, file_str);
+            chan->cwrite((char *)&ncm, sizeof (ncm));
+            char* buf = chan->cread();
+            string name = buf;
+            FIFORequestChannel* w_chan = new FIFORequestChannel(name, FIFORequestChannel::CLIENT_SIDE);
+            workers[i] = thread(worker_function, &request_buffer, w_chan, &hc, hc_mtx, file_str);
+            delete[] buf;
         }
         // join threads
         pt.join();
@@ -242,16 +224,15 @@ int main(int argc, char *argv[])
             patients[i-1] = thread(patient_function, &request_buffer, i, n, false, 0, "");
             Histogram* h = new Histogram(NUM_BUCKETS, MIN_HIST, MAX_HIST); // one for each person
             hc.add(h);
-    //        hc_mtx[i-1] = mutex();
         }
         
         for(int i = 0; i < w; i++) { // create channels, create worker threads
             chan->cwrite((char *)&ncm, sizeof (ncm));
             char* buf = chan->cread();
             string name = buf;
-    //        cout << "channel " << name << " created for w" << i << endl;
             FIFORequestChannel* w_chan = new FIFORequestChannel(name, FIFORequestChannel::CLIENT_SIDE);
             workers[i] = thread(worker_function, &request_buffer, w_chan, &hc, hc_mtx, "");
+            delete[] buf;
         }
 
         /* Join all threads here */
