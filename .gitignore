@@ -1,11 +1,2 @@
-# Ignore all
-*
-
-# Unignore all with extensions
-!*.*
-
-# Ignore all object files
-*.o
-
-# Unignore all dirs
-!*/
+BIMDC/*
+received/*

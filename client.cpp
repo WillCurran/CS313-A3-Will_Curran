@@ -16,7 +16,7 @@ void *patient_function(BoundedBuffer* b, int patient, int num_requests, bool isF
     if(isFT) {
         const char* filename_cstr = filename.c_str();
         
-        int block_size = sizeof(filemsg) + sizeof(filename_cstr); // block size sent
+        int block_size = sizeof(filemsg) + sizeof(filename_cstr) + 1; // block size sent
         char* block = new char[block_size];
         filemsg* msg = (filemsg*) block;
         char* filename_to_server = block + sizeof(filemsg);
@@ -173,7 +173,7 @@ int main(int argc, char *argv[])
     if(isFT) {
         string file_str = filename;
         // prepare the first file message
-        int block_size = sizeof(filemsg) + sizeof(filename);
+        int block_size = sizeof(filemsg) + sizeof(filename) + 1;
         char* block = new char[block_size];
         filemsg* getFileLength = (filemsg*) block;
         char* filename_to_server = block + sizeof(filemsg);
